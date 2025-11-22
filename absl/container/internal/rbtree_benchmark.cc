@@ -32,6 +32,7 @@ static void BM_RBTree_Insert(benchmark::State& state) {
             tree.insert(word, i++);
         }
     }
+    state.counters["words"] = benchmark::Counter(words.size());
 }
 BENCHMARK(BM_RBTree_Insert);
 
@@ -44,6 +45,7 @@ static void BM_BTreeMap_Insert(benchmark::State& state) {
             map[word] = i++;
         }
     }
+    state.counters["words"] = benchmark::Counter(words.size());
 }
 BENCHMARK(BM_BTreeMap_Insert);
 
@@ -70,6 +72,8 @@ static void BM_RBTree_Search(benchmark::State& state) {
             benchmark::DoNotOptimize(tree.search(word));
         }
     }
+    state.counters["total_words"] = benchmark::Counter(words.size());
+    state.counters["search_words"] = benchmark::Counter(search_words.size());
 }
 BENCHMARK(BM_RBTree_Search);
 
@@ -87,6 +91,8 @@ static void BM_BTreeMap_Search(benchmark::State& state) {
             benchmark::DoNotOptimize(map.find(word));
         }
     }
+    state.counters["total_words"] = benchmark::Counter(words.size());
+    state.counters["search_words"] = benchmark::Counter(search_words.size());
 }
 BENCHMARK(BM_BTreeMap_Search);
 
@@ -98,12 +104,17 @@ static void BM_RBTree_Iterate(benchmark::State& state) {
         tree.insert(word, i++);
     }
 
+    size_t iterated_count = 0;
     for (auto _ : state) {
+        iterated_count = 0;
         for (auto it = tree.begin(); it != tree.end(); ++it) {
             benchmark::DoNotOptimize(it.key());
             benchmark::DoNotOptimize(*it);
+            iterated_count++;
         }
     }
+    state.counters["words_iterated"] = benchmark::Counter(iterated_count);
+    state.counters["total_words"] = benchmark::Counter(words.size());
 }
 BENCHMARK(BM_RBTree_Iterate);
 
@@ -115,13 +126,153 @@ static void BM_BTreeMap_Iterate(benchmark::State& state) {
         map[word] = i++;
     }
 
+    size_t iterated_count = 0;
     for (auto _ : state) {
+        iterated_count = 0;
         for (auto const& [key, val] : map) {
             benchmark::DoNotOptimize(key);
             benchmark::DoNotOptimize(val);
+            iterated_count++;
         }
     }
+    state.counters["words_iterated"] = benchmark::Counter(iterated_count);
+    state.counters["total_words"] = benchmark::Counter(words.size());
 }
 BENCHMARK(BM_BTreeMap_Iterate);
+
+// Memory benchmarks
+static void BM_RBTree_Memory(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt");
+    absl::container_internal::RBTree<std::string, int> tree;
+    int i = 0;
+    for (const auto& word : words) {
+        tree.insert(word, i++);
+    }
+    
+    // Estimate memory usage for RBTree
+    // Each node has: 3 pointers (parent, left, right) = 24 bytes
+    //                2 pointers (prev, next) = 16 bytes
+    //                2 pointers (min_node, max_node) = 16 bytes
+    //                Color = 1 byte
+    //                Key (string) + Value (int) = variable
+    //                Padding = ~7 bytes
+    // Total per node overhead: ~64 bytes + key size + value size
+    size_t node_count = 0;
+    for (auto it = tree.begin(); it != tree.end(); ++it) {
+        node_count++;
+    }
+    size_t total_key_size = 0;
+    for (auto it = tree.begin(); it != tree.end(); ++it) {
+        total_key_size += it.key().size();
+    }
+    
+    // Estimate: node overhead + key storage + value storage
+    size_t estimated_memory = node_count * 64 +  // Node overhead
+                              total_key_size +   // Key strings
+                              node_count * sizeof(int) +  // Values
+                              node_count * (sizeof(std::string) - sizeof(char*)); // String object overhead
+    
+    for (auto _ : state) {
+        state.SetBytesProcessed(estimated_memory);
+        benchmark::DoNotOptimize(tree);
+    }
+    state.counters["nodes"] = benchmark::Counter(node_count);
+    state.counters["bytes_per_node"] = benchmark::Counter(estimated_memory / static_cast<double>(node_count));
+    state.counters["total_bytes"] = benchmark::Counter(estimated_memory);
+}
+BENCHMARK(BM_RBTree_Memory);
+
+static void BM_BTreeMap_Memory(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt");
+    absl::btree_map<std::string, int> map;
+    int i = 0;
+    for (const auto& word : words) {
+        map[word] = i++;
+    }
+    
+    // BTree stores multiple values per node (256 bytes per node typically)
+    // Calculate based on actual structure
+    size_t element_count = map.size();
+    size_t total_key_size = 0;
+    for (const auto& [key, val] : map) {
+        total_key_size += key.size();
+    }
+    
+    // BTree has better memory efficiency
+    // Estimate based on: node overhead + packed values
+    // Each node is ~256 bytes and holds ~20-50 values
+    size_t estimated_nodes = (element_count + 20) / 20; // Rough estimate
+    size_t estimated_memory = estimated_nodes * 256 +  // Node overhead
+                              total_key_size +         // Key strings
+                              element_count * sizeof(int) +  // Values
+                              element_count * (sizeof(std::string) - sizeof(char*)); // String object overhead
+    
+    for (auto _ : state) {
+        state.SetBytesProcessed(estimated_memory);
+        benchmark::DoNotOptimize(map);
+    }
+    state.counters["elements"] = benchmark::Counter(element_count);
+    state.counters["bytes_per_element"] = benchmark::Counter(estimated_memory / static_cast<double>(element_count));
+    state.counters["total_bytes"] = benchmark::Counter(estimated_memory);
+    state.counters["estimated_nodes"] = benchmark::Counter(estimated_nodes);
+}
+BENCHMARK(BM_BTreeMap_Memory);
+
+// Direct memory comparison
+static void BM_Memory_Comparison(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt");
+    
+    // Build RBTree
+    absl::container_internal::RBTree<std::string, int> rbtree;
+    int i = 0;
+    for (const auto& word : words) {
+        rbtree.insert(word, i++);
+    }
+    
+    // Build BTreeMap
+    absl::btree_map<std::string, int> btreemap;
+    i = 0;
+    for (const auto& word : words) {
+        btreemap[word] = i++;
+    }
+    
+    // Calculate memory estimates
+    size_t rbtree_nodes = 0;
+    for (auto it = rbtree.begin(); it != rbtree.end(); ++it) {
+        rbtree_nodes++;
+    }
+    size_t btreemap_elements = btreemap.size();
+    
+    size_t total_key_size = 0;
+    for (const auto& word : words) {
+        total_key_size += word.size();
+    }
+    
+    // RBTree memory estimate
+    size_t rbtree_memory = rbtree_nodes * 64 + total_key_size + 
+                          rbtree_nodes * sizeof(int) +
+                          rbtree_nodes * (sizeof(std::string) - sizeof(char*));
+    
+    // BTreeMap memory estimate
+    size_t estimated_btree_nodes = (btreemap_elements + 20) / 20;
+    size_t btreemap_memory = estimated_btree_nodes * 256 + total_key_size +
+                            btreemap_elements * sizeof(int) +
+                            btreemap_elements * (sizeof(std::string) - sizeof(char*));
+    
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(rbtree);
+        benchmark::DoNotOptimize(btreemap);
+    }
+    
+    state.counters["rbtree_bytes"] = benchmark::Counter(rbtree_memory);
+    state.counters["btreemap_bytes"] = benchmark::Counter(btreemap_memory);
+    state.counters["rbtree_bytes_per_element"] = benchmark::Counter(
+        rbtree_memory / static_cast<double>(rbtree_nodes));
+    state.counters["btreemap_bytes_per_element"] = benchmark::Counter(
+        btreemap_memory / static_cast<double>(btreemap_elements));
+    state.counters["memory_ratio"] = benchmark::Counter(
+        rbtree_memory / static_cast<double>(btreemap_memory));
+}
+BENCHMARK(BM_Memory_Comparison);
 
 // BENCHMARK_MAIN() is in the BUILD file dependency
