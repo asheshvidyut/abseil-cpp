@@ -35,6 +35,22 @@ package(
 
 licenses(["notice"])
 
+cc_binary(
+    name = "rbtree_benchmark",
+    testonly = True,
+    srcs = ["internal/rbtree_benchmark.cc"],
+    data = ["internal/words.txt"],
+    copts = ABSL_TEST_COPTS,
+    linkopts = ABSL_DEFAULT_LINKOPTS,
+    tags = ["benchmark"],
+    visibility = ["//visibility:private"],
+    deps = [
+        ":btree",
+        "//absl/container/internal:rbtree",
+        "@google_benchmark//:benchmark_main",
+    ],
+)
+
 cc_library(
     name = "compressed_tuple",
     hdrs = ["internal/compressed_tuple.h"],

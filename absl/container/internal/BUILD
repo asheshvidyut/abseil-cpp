@@ -1,5 +1,8 @@
 # BUILD file for container internal tests
 
+# Description:
+#   Red-Black Tree implementation for Abseil's ordered containers.
+
 cc_library(
     name = "rbtree",
     hdrs = ["rbtree.h"],
