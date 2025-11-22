@@ -455,8 +455,7 @@ BENCHMARK(BM_RBTree_Search_Size)
     ->Arg(1000)
     ->Arg(10000)
     ->Arg(100000)
-    ->Arg(1000000)
-    ->Arg(10000000);
+    ->Arg(1000000);
 
 static void BM_BTreeMap_Search_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
@@ -489,7 +488,6 @@ BENCHMARK(BM_BTreeMap_Search_Size)
     ->Arg(1000)
     ->Arg(10000)
     ->Arg(100000)
-    ->Arg(1000000)
-    ->Arg(10000000);
+    ->Arg(1000000);
 
 // BENCHMARK_MAIN() is in the BUILD file dependency
