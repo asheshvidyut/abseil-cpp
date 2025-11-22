@@ -501,7 +501,8 @@ BENCHMARK(BM_RBTree_Iterate_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000);
+    ->Arg(100000)
+    ->Arg(1000000);
 
 // Parameterized search benchmarks with different sizes
 static void BM_BTreeMap_Search_Size(benchmark::State& state) {
