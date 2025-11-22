@@ -28,13 +28,31 @@ TEST(RBTreeTest, InsertAndTraverseWords) {
     std::vector<std::string> sorted_words = words;
     std::sort(sorted_words.begin(), sorted_words.end());
 
-    std::vector<std::string> traversed_words;
+    std::vector<std::pair<std::string, int>> traversed_pairs;
     for (auto it = tree.begin(); it != tree.end(); ++it) {
-        traversed_words.push_back(it.key());
+        traversed_pairs.push_back({it.key(), *it});
     }
 
-    EXPECT_EQ(traversed_words.size(), sorted_words.size());
-    EXPECT_EQ(traversed_words, sorted_words);
+    // Create expected pairs for comparison
+    std::map<std::string, int> expected_map;
+    for (size_t i = 0; i < words.size(); ++i) {
+        expected_map[words[i]] = i;
+    }
+
+    std::vector<std::pair<std::string, int>> expected_pairs;
+    for (const auto& word : sorted_words) {
+        expected_pairs.push_back({word, expected_map[word]});
+    }
+
+    EXPECT_EQ(traversed_pairs.size(), sorted_words.size());
+    EXPECT_EQ(traversed_pairs, expected_pairs);
+
+    // Verify search returns the correct line numbers
+    for (size_t i = 0; i < words.size(); ++i) {
+        auto* node = tree.search(words[i]);
+        ASSERT_NE(node, nullptr) << "Word not found: " << words[i];
+        EXPECT_EQ(node->value, expected_map[words[i]]) << "Value mismatch for word: " << words[i];
+    }
 }
 
 TEST(RBTreeTest, OperatorSquareBrackets) {
