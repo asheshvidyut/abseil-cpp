@@ -258,63 +258,6 @@ static void BM_BTreeMap_Memory(benchmark::State& state) {
 }
 BENCHMARK(BM_BTreeMap_Memory);
 
-// Direct memory comparison
-static void BM_Memory_Comparison(benchmark::State& state) {
-    auto words = ReadWords("absl/container/internal/words.txt");
-    
-    // Build RBTree
-    absl::container_internal::RBTree<std::string, int> rbtree;
-    int i = 0;
-    for (const auto& word : words) {
-        rbtree.insert(word, i++);
-    }
-    
-    // Build BTreeMap
-    absl::btree_map<std::string, int> btreemap;
-    i = 0;
-    for (const auto& word : words) {
-        btreemap[word] = i++;
-    }
-    
-    // Calculate memory estimates
-    size_t rbtree_nodes = 0;
-    for (auto it = rbtree.begin(); it != rbtree.end(); ++it) {
-        rbtree_nodes++;
-    }
-    size_t btreemap_elements = btreemap.size();
-    
-    size_t total_key_size = 0;
-    for (const auto& word : words) {
-        total_key_size += word.size();
-    }
-    
-    // RBTree memory estimate
-    size_t rbtree_memory = rbtree_nodes * 64 + total_key_size + 
-                          rbtree_nodes * sizeof(int) +
-                          rbtree_nodes * (sizeof(std::string) - sizeof(char*));
-    
-    // BTreeMap memory estimate
-    size_t estimated_btree_nodes = (btreemap_elements + 20) / 20;
-    size_t btreemap_memory = estimated_btree_nodes * 256 + total_key_size +
-                            btreemap_elements * sizeof(int) +
-                            btreemap_elements * (sizeof(std::string) - sizeof(char*));
-    
-    for (auto _ : state) {
-        benchmark::DoNotOptimize(rbtree);
-        benchmark::DoNotOptimize(btreemap);
-    }
-    
-    state.counters["rbtree_bytes"] = benchmark::Counter(rbtree_memory);
-    state.counters["btreemap_bytes"] = benchmark::Counter(btreemap_memory);
-    state.counters["rbtree_bytes_per_element"] = benchmark::Counter(
-        rbtree_memory / static_cast<double>(rbtree_nodes));
-    state.counters["btreemap_bytes_per_element"] = benchmark::Counter(
-        btreemap_memory / static_cast<double>(btreemap_elements));
-    state.counters["memory_ratio"] = benchmark::Counter(
-        rbtree_memory / static_cast<double>(btreemap_memory));
-}
-BENCHMARK(BM_Memory_Comparison);
-
 // Parameterized insert benchmarks with different sizes
 static void BM_RBTree_Insert_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
