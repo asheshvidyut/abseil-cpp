@@ -368,7 +368,8 @@ BENCHMARK(BM_BTreeMap_Insert_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000);
+    ->Arg(100000)
+    ->Arg(1000000);
 
 static void BM_StdMap_Insert_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
@@ -388,7 +389,8 @@ BENCHMARK(BM_StdMap_Insert_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000);
+    ->Arg(100000)
+    ->Arg(1000000);
 
 static void BM_RBTree_Insert_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
@@ -408,7 +410,8 @@ BENCHMARK(BM_RBTree_Insert_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000);
+    ->Arg(100000)
+    ->Arg(1000000);
 
 // Parameterized iterate benchmarks with different sizes
 static void BM_BTreeMap_Iterate_Size(benchmark::State& state) {
@@ -467,7 +470,8 @@ BENCHMARK(BM_StdMap_Iterate_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000);
+    ->Arg(100000)
+    ->Arg(1000000);
 
 static void BM_RBTree_Iterate_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
@@ -529,7 +533,8 @@ BENCHMARK(BM_BTreeMap_Search_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000);
+    ->Arg(100000)
+    ->Arg(1000000);
 
 static void BM_StdMap_Search_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
@@ -561,7 +566,8 @@ BENCHMARK(BM_StdMap_Search_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000);
+    ->Arg(100000)
+    ->Arg(1000000);
 
 static void BM_RBTree_Search_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
@@ -593,6 +599,7 @@ BENCHMARK(BM_RBTree_Search_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000);
+    ->Arg(100000)
+    ->Arg(1000000);
 
 // BENCHMARK_MAIN() is in the BUILD file dependency
