@@ -64,19 +64,6 @@ std::vector<std::string> GenerateUUIDs(size_t count) {
     return uuids;
 }
 
-static void BM_RBTree_Insert(benchmark::State& state) {
-    auto words = ReadWords("absl/container/internal/words.txt");
-    for (auto _ : state) {
-        absl::container_internal::RBTree<std::string, int> tree;
-        int i = 0;
-        for (const auto& word : words) {
-            tree.insert(word, i++);
-        }
-    }
-    state.counters["words"] = benchmark::Counter(words.size());
-}
-BENCHMARK(BM_RBTree_Insert);
-
 static void BM_BTreeMap_Insert(benchmark::State& state) {
     auto words = ReadWords("absl/container/internal/words.txt");
     for (auto _ : state) {
@@ -103,6 +90,19 @@ static void BM_StdMap_Insert(benchmark::State& state) {
 }
 BENCHMARK(BM_StdMap_Insert);
 
+static void BM_RBTree_Insert(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt");
+    for (auto _ : state) {
+        absl::container_internal::RBTree<std::string, int> tree;
+        int i = 0;
+        for (const auto& word : words) {
+            tree.insert(word, i++);
+        }
+    }
+    state.counters["words"] = benchmark::Counter(words.size());
+}
+BENCHMARK(BM_RBTree_Insert);
+
 // Function to get a subset of words to search for
 std::vector<std::string> GetSearchWords(const std::vector<std::string>& all_words, int count) {
     std::vector<std::string> search_words;
@@ -111,25 +111,6 @@ std::vector<std::string> GetSearchWords(const std::vector<std::string>& all_word
                 count, std::mt19937{std::random_device{}()});
     return search_words;
 }
-
-static void BM_RBTree_Search(benchmark::State& state) {
-    auto words = ReadWords("absl/container/internal/words.txt");
-    absl::container_internal::RBTree<std::string, int> tree;
-    int i = 0;
-    for (const auto& word : words) {
-        tree.insert(word, i++);
-    }
-    auto search_words = GetSearchWords(words, words.size() / 10);
-
-    for (auto _ : state) {
-        for (const auto& word : search_words) {
-            benchmark::DoNotOptimize(tree.search(word));
-        }
-    }
-    state.counters["total_words"] = benchmark::Counter(words.size());
-    state.counters["search_words"] = benchmark::Counter(search_words.size());
-}
-BENCHMARK(BM_RBTree_Search);
 
 static void BM_BTreeMap_Search(benchmark::State& state) {
     auto words = ReadWords("absl/container/internal/words.txt");
@@ -169,27 +150,24 @@ static void BM_StdMap_Search(benchmark::State& state) {
 }
 BENCHMARK(BM_StdMap_Search);
 
-static void BM_RBTree_Iterate_All(benchmark::State& state) {
+static void BM_RBTree_Search(benchmark::State& state) {
     auto words = ReadWords("absl/container/internal/words.txt");
     absl::container_internal::RBTree<std::string, int> tree;
     int i = 0;
     for (const auto& word : words) {
         tree.insert(word, i++);
     }
+    auto search_words = GetSearchWords(words, words.size() / 10);
 
-    size_t iterated_count = 0;
     for (auto _ : state) {
-        iterated_count = 0;
-        for (auto it = tree.begin(); it != tree.end(); ++it) {
-            benchmark::DoNotOptimize(it.key());
-            benchmark::DoNotOptimize(*it);
-            iterated_count++;
+        for (const auto& word : search_words) {
+            benchmark::DoNotOptimize(tree.search(word));
         }
     }
-    state.counters["words_iterated"] = benchmark::Counter(iterated_count);
     state.counters["total_words"] = benchmark::Counter(words.size());
+    state.counters["search_words"] = benchmark::Counter(search_words.size());
 }
-BENCHMARK(BM_RBTree_Iterate_All);
+BENCHMARK(BM_RBTree_Search);
 
 static void BM_BTreeMap_Iterate_All(benchmark::State& state) {
     auto words = ReadWords("absl/container/internal/words.txt");
@@ -235,48 +213,29 @@ static void BM_StdMap_Iterate_All(benchmark::State& state) {
 }
 BENCHMARK(BM_StdMap_Iterate_All);
 
-// Memory benchmarks
-static void BM_RBTree_Memory(benchmark::State& state) {
+static void BM_RBTree_Iterate_All(benchmark::State& state) {
     auto words = ReadWords("absl/container/internal/words.txt");
     absl::container_internal::RBTree<std::string, int> tree;
     int i = 0;
     for (const auto& word : words) {
         tree.insert(word, i++);
     }
-    
-    // Estimate memory usage for RBTree
-    // Each node has: 3 pointers (parent, left, right) = 24 bytes
-    //                2 pointers (prev, next) = 16 bytes
-    //                2 pointers (min_node, max_node) = 16 bytes
-    //                Color = 1 byte
-    //                Key (string) + Value (int) = variable
-    //                Padding = ~7 bytes
-    // Total per node overhead: ~64 bytes + key size + value size
-    size_t node_count = 0;
-    for (auto it = tree.begin(); it != tree.end(); ++it) {
-        node_count++;
-    }
-    size_t total_key_size = 0;
-    for (auto it = tree.begin(); it != tree.end(); ++it) {
-        total_key_size += it.key().size();
-    }
-    
-    // Estimate: node overhead + key storage + value storage
-    size_t estimated_memory = node_count * 64 +  // Node overhead
-                              total_key_size +   // Key strings
-                              node_count * sizeof(int) +  // Values
-                              node_count * (sizeof(std::string) - sizeof(char*)); // String object overhead
-    
-    for (auto _ : state) {
-        state.SetBytesProcessed(estimated_memory);
-        benchmark::DoNotOptimize(tree);
-    }
-    state.counters["nodes"] = benchmark::Counter(node_count);
-    state.counters["bytes_per_node"] = benchmark::Counter(estimated_memory / static_cast<double>(node_count));
-    state.counters["total_bytes"] = benchmark::Counter(estimated_memory);
-}
-BENCHMARK(BM_RBTree_Memory);
 
+    size_t iterated_count = 0;
+    for (auto _ : state) {
+        iterated_count = 0;
+        for (auto it = tree.begin(); it != tree.end(); ++it) {
+            benchmark::DoNotOptimize(it.key());
+            benchmark::DoNotOptimize(*it);
+            iterated_count++;
+        }
+    }
+    state.counters["words_iterated"] = benchmark::Counter(iterated_count);
+    state.counters["total_words"] = benchmark::Counter(words.size());
+}
+BENCHMARK(BM_RBTree_Iterate_All);
+
+// Memory benchmarks
 static void BM_BTreeMap_Memory(benchmark::State& state) {
     auto words = ReadWords("absl/container/internal/words.txt");
     absl::btree_map<std::string, int> map;
@@ -349,28 +308,48 @@ static void BM_StdMap_Memory(benchmark::State& state) {
 }
 BENCHMARK(BM_StdMap_Memory);
 
-// Parameterized insert benchmarks with different sizes
-static void BM_RBTree_Insert_Size(benchmark::State& state) {
-    size_t num_elements = state.range(0);
-    auto uuids = GenerateUUIDs(num_elements);
+static void BM_RBTree_Memory(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt");
+    absl::container_internal::RBTree<std::string, int> tree;
+    int i = 0;
+    for (const auto& word : words) {
+        tree.insert(word, i++);
+    }
+    
+    // Estimate memory usage for RBTree
+    // Each node has: 3 pointers (parent, left, right) = 24 bytes
+    //                2 pointers (prev, next) = 16 bytes
+    //                2 pointers (min_node, max_node) = 16 bytes
+    //                Color = 1 byte
+    //                Key (string) + Value (int) = variable
+    //                Padding = ~7 bytes
+    // Total per node overhead: ~64 bytes + key size + value size
+    size_t node_count = 0;
+    for (auto it = tree.begin(); it != tree.end(); ++it) {
+        node_count++;
+    }
+    size_t total_key_size = 0;
+    for (auto it = tree.begin(); it != tree.end(); ++it) {
+        total_key_size += it.key().size();
+    }
+    
+    // Estimate: node overhead + key storage + value storage
+    size_t estimated_memory = node_count * 64 +  // Node overhead
+                              total_key_size +   // Key strings
+                              node_count * sizeof(int) +  // Values
+                              node_count * (sizeof(std::string) - sizeof(char*)); // String object overhead
     
     for (auto _ : state) {
-        absl::container_internal::RBTree<std::string, int> tree;
-        int i = 0;
-        for (const auto& uuid : uuids) {
-            tree.insert(uuid, i++);
-        }
+        state.SetBytesProcessed(estimated_memory);
+        benchmark::DoNotOptimize(tree);
     }
-    state.counters["elements"] = benchmark::Counter(num_elements);
+    state.counters["nodes"] = benchmark::Counter(node_count);
+    state.counters["bytes_per_node"] = benchmark::Counter(estimated_memory / static_cast<double>(node_count));
+    state.counters["total_bytes"] = benchmark::Counter(estimated_memory);
 }
-BENCHMARK(BM_RBTree_Insert_Size)
-    ->Arg(10)
-    ->Arg(100)
-    ->Arg(1000)
-    ->Arg(10000)
-    ->Arg(100000)
-    ->Arg(1000000);
+BENCHMARK(BM_RBTree_Memory);
 
+// Parameterized insert benchmarks with different sizes
 static void BM_BTreeMap_Insert_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
     auto uuids = GenerateUUIDs(num_elements);
@@ -389,8 +368,7 @@ BENCHMARK(BM_BTreeMap_Insert_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000)
-    ->Arg(1000000);
+    ->Arg(100000);
 
 static void BM_StdMap_Insert_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
@@ -410,40 +388,29 @@ BENCHMARK(BM_StdMap_Insert_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000)
-    ->Arg(1000000);
+    ->Arg(100000);
 
-// Parameterized iterate benchmarks with different sizes
-static void BM_RBTree_Iterate_Size(benchmark::State& state) {
+static void BM_RBTree_Insert_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
     auto uuids = GenerateUUIDs(num_elements);
     
-    absl::container_internal::RBTree<std::string, int> tree;
-    int i = 0;
-    for (const auto& uuid : uuids) {
-        tree.insert(uuid, i++);
-    }
-    
-    size_t iterated_count = 0;
     for (auto _ : state) {
-        iterated_count = 0;
-        for (auto it = tree.begin(); it != tree.end(); ++it) {
-            benchmark::DoNotOptimize(it.key());
-            benchmark::DoNotOptimize(*it);
-            iterated_count++;
+        absl::container_internal::RBTree<std::string, int> tree;
+        int i = 0;
+        for (const auto& uuid : uuids) {
+            tree.insert(uuid, i++);
         }
     }
     state.counters["elements"] = benchmark::Counter(num_elements);
-    state.counters["iterated"] = benchmark::Counter(iterated_count);
 }
-BENCHMARK(BM_RBTree_Iterate_Size)
+BENCHMARK(BM_RBTree_Insert_Size)
     ->Arg(10)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000)
-    ->Arg(1000000);
+    ->Arg(100000);
 
+// Parameterized iterate benchmarks with different sizes
 static void BM_BTreeMap_Iterate_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
     auto uuids = GenerateUUIDs(num_elements);
@@ -471,8 +438,7 @@ BENCHMARK(BM_BTreeMap_Iterate_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000)
-    ->Arg(1000000);
+    ->Arg(100000);
 
 static void BM_StdMap_Iterate_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
@@ -501,11 +467,9 @@ BENCHMARK(BM_StdMap_Iterate_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000)
-    ->Arg(1000000);
+    ->Arg(100000);
 
-// Parameterized search benchmarks with different sizes
-static void BM_RBTree_Search_Size(benchmark::State& state) {
+static void BM_RBTree_Iterate_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
     auto uuids = GenerateUUIDs(num_elements);
     
@@ -515,29 +479,26 @@ static void BM_RBTree_Search_Size(benchmark::State& state) {
         tree.insert(uuid, i++);
     }
     
-    // Search for 10% of the elements (or at least 10, or all if less than 10)
-    size_t search_count = std::max(size_t(10), std::min(num_elements / 10, num_elements));
-    std::vector<std::string> search_uuids;
-    search_uuids.reserve(search_count);
-    std::sample(uuids.begin(), uuids.end(), std::back_inserter(search_uuids),
-                search_count, std::mt19937{std::random_device{}()});
-    
+    size_t iterated_count = 0;
     for (auto _ : state) {
-        for (const auto& uuid : search_uuids) {
-            benchmark::DoNotOptimize(tree.search(uuid));
+        iterated_count = 0;
+        for (auto it = tree.begin(); it != tree.end(); ++it) {
+            benchmark::DoNotOptimize(it.key());
+            benchmark::DoNotOptimize(*it);
+            iterated_count++;
         }
     }
     state.counters["elements"] = benchmark::Counter(num_elements);
-    state.counters["searches"] = benchmark::Counter(search_count);
+    state.counters["iterated"] = benchmark::Counter(iterated_count);
 }
-BENCHMARK(BM_RBTree_Search_Size)
+BENCHMARK(BM_RBTree_Iterate_Size)
     ->Arg(10)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000)
-    ->Arg(1000000);
+    ->Arg(100000);
 
+// Parameterized search benchmarks with different sizes
 static void BM_BTreeMap_Search_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
     auto uuids = GenerateUUIDs(num_elements);
@@ -568,8 +529,7 @@ BENCHMARK(BM_BTreeMap_Search_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000)
-    ->Arg(1000000);
+    ->Arg(100000);
 
 static void BM_StdMap_Search_Size(benchmark::State& state) {
     size_t num_elements = state.range(0);
@@ -601,7 +561,38 @@ BENCHMARK(BM_StdMap_Search_Size)
     ->Arg(100)
     ->Arg(1000)
     ->Arg(10000)
-    ->Arg(100000)
-    ->Arg(1000000);
+    ->Arg(100000);
+
+static void BM_RBTree_Search_Size(benchmark::State& state) {
+    size_t num_elements = state.range(0);
+    auto uuids = GenerateUUIDs(num_elements);
+    
+    absl::container_internal::RBTree<std::string, int> tree;
+    int i = 0;
+    for (const auto& uuid : uuids) {
+        tree.insert(uuid, i++);
+    }
+    
+    // Search for 10% of the elements (or at least 10, or all if less than 10)
+    size_t search_count = std::max(size_t(10), std::min(num_elements / 10, num_elements));
+    std::vector<std::string> search_uuids;
+    search_uuids.reserve(search_count);
+    std::sample(uuids.begin(), uuids.end(), std::back_inserter(search_uuids),
+                search_count, std::mt19937{std::random_device{}()});
+    
+    for (auto _ : state) {
+        for (const auto& uuid : search_uuids) {
+            benchmark::DoNotOptimize(tree.search(uuid));
+        }
+    }
+    state.counters["elements"] = benchmark::Counter(num_elements);
+    state.counters["searches"] = benchmark::Counter(search_count);
+}
+BENCHMARK(BM_RBTree_Search_Size)
+    ->Arg(10)
+    ->Arg(100)
+    ->Arg(1000)
+    ->Arg(10000)
+    ->Arg(100000);
 
 // BENCHMARK_MAIN() is in the BUILD file dependency
