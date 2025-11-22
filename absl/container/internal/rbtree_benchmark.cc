@@ -229,10 +229,7 @@ static void BM_BTreeMap_Memory(benchmark::State& state) {
         state.SetBytesProcessed(estimated_memory);
         benchmark::DoNotOptimize(map);
     }
-    state.counters["elements"] = benchmark::Counter(element_count);
-    state.counters["bytes_per_element"] = benchmark::Counter(estimated_memory / static_cast<double>(element_count));
     state.counters["total_bytes"] = benchmark::Counter(estimated_memory);
-    state.counters["estimated_nodes"] = benchmark::Counter(estimated_nodes);
 }
 BENCHMARK(BM_BTreeMap_Memory);
 
@@ -266,8 +263,6 @@ static void BM_StdMap_Memory(benchmark::State& state) {
         state.SetBytesProcessed(estimated_memory);
         benchmark::DoNotOptimize(map);
     }
-    state.counters["elements"] = benchmark::Counter(element_count);
-    state.counters["bytes_per_element"] = benchmark::Counter(estimated_memory / static_cast<double>(element_count));
     state.counters["total_bytes"] = benchmark::Counter(estimated_memory);
 }
 BENCHMARK(BM_StdMap_Memory);
@@ -307,8 +302,6 @@ static void BM_RBTree_Memory(benchmark::State& state) {
         state.SetBytesProcessed(estimated_memory);
         benchmark::DoNotOptimize(tree);
     }
-    state.counters["nodes"] = benchmark::Counter(node_count);
-    state.counters["bytes_per_node"] = benchmark::Counter(estimated_memory / static_cast<double>(node_count));
     state.counters["total_bytes"] = benchmark::Counter(estimated_memory);
 }
 BENCHMARK(BM_RBTree_Memory);
