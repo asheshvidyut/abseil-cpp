@@ -90,6 +90,20 @@ public:
     iterator end() { return iterator(nullptr); }
     Value& operator[](const Key& key);
 
+    iterator lower_bound(const Key& key) {
+        Node<Key, Value>* current = root;
+        Node<Key, Value>* result = nullptr;
+        while (current != nullptr) {
+            if (!(current->key < key)) { // current->key >= key
+                result = current;
+                current = current->left;
+            } else {
+                current = current->right;
+            }
+        }
+        return iterator(result);
+    }
+
     class const_iterator {
     public:
         using iterator_category = std::bidirectional_iterator_tag;
@@ -130,7 +144,7 @@ private:
     void leftRotate(Node<Key, Value>* x);
     void rightRotate(Node<Key, Value>* y);
     void fixInsertViolation(Node<Key, Value>* z);
-    void fixDeleteViolation(Node<Key, Value>* x);
+    void fixDeleteViolation(Node<Key, Value>* x, Node<Key, Value>* parent);
     Node<Key, Value>* minimum(Node<Key, Value>* node);
     Node<Key, Value>* maximum(Node<Key, Value>* node);
     void transplant(Node<Key, Value>* u, Node<Key, Value>* v);
@@ -355,119 +369,117 @@ Node<Key, Value>* RBTree<Key, Value>::search(const Key& key) {
 template <typename Key, typename Value>
 bool RBTree<Key, Value>::deleteNode(const Key& key) {
     Node<Key, Value>* z = search(key);
-    if (z == nullptr) {
-        return false;  // Key not found
-    }
+    if (z == nullptr) return false;
 
     // Unlink from doubly linked list
-    if (z->prev != nullptr) {
-        z->prev->next = z->next;
-    }
-    if (z->next != nullptr) {
-        z->next->prev = z->prev;
-    }
+    if (z->prev != nullptr) z->prev->next = z->next;
+    if (z->next != nullptr) z->next->prev = z->prev;
 
-    Node<Key, Value>* x;
     Node<Key, Value>* y = z;
     Color y_original_color = y->color;
+    Node<Key, Value>* x;
+    Node<Key, Value>* x_parent;
 
     if (z->left == nullptr) {
         x = z->right;
-        transplant(z, z->right);
+        x_parent = z->parent; // x_parent is z->parent
+        transplant(z, x);
     } else if (z->right == nullptr) {
         x = z->left;
-        transplant(z, z->left);
+        x_parent = z->parent; // x_parent is z->parent
+        transplant(z, x);
     } else {
         y = minimum(z->right);
         y_original_color = y->color;
         x = y->right;
-        if (y->parent == z) {
-            if (x != nullptr) x->parent = y;
-        } else {
-            transplant(y, y->right);
-            y->right = z->right;
-            if (y->right != nullptr) y->right->parent = y;
-        }
-        transplant(z, y);
-        y->left = z->left;
-        if (y->left != nullptr) y->left->parent = y;
-        y->color = z->color;
-    }
-    Node<Key, Value>* fix_start_node = nullptr;
-    if (y_original_color == Color::BLACK) {
-        fix_start_node = x;
-    }
+        x_parent = y; // x_parent is y if x is y's child, otherwise it's y->parent
 
-    // Update min/max pointers in ancestors of the physically removed node y
-    Node<Key, Value>* curr = y->parent;
-    while (curr != nullptr) {
-        updateMinMax(curr);
-        curr = curr->parent;
+        if (y->parent == z) {
+            x_parent = y;
+        } else {
+            x_parent = y->parent;
+            transplant(y, x); // x replaces y
+            y->right = z->right;
+            y->right->parent = y;
+        }
+        transplant(z, y); // y replaces z
+        y->left = z->left;
+        y->left->parent = y;
+        y->color = z->color;
     }
 
     delete z;
 
-    if (y_original_color == Color::BLACK) {
-        if (fix_start_node != nullptr) fixDeleteViolation(fix_start_node);
-        // TODO: Handle the case where fix_start_node is nullptr, potentially needing to pass parent info
+    // Update min/max on ancestors of where y was originally. 
+    Node<Key, Value>* curr = x_parent;
+    while(curr != nullptr) { 
+        updateMinMax(curr); 
+        curr = curr->parent; 
     }
+
+    if (y_original_color == Color::BLACK) {
+        fixDeleteViolation(x, x_parent);
+    }
+
     return true;
 }
 
 template <typename Key, typename Value>
-void RBTree<Key, Value>::fixDeleteViolation(Node<Key, Value>* x) {
+void RBTree<Key, Value>::fixDeleteViolation(Node<Key, Value>* x, Node<Key, Value>* parent) {
     while (x != root && (x == nullptr || x->color == Color::BLACK)) {
-        if (x == x->parent->left) {
-            Node<Key, Value>* w = x->parent->right;
-            if (w != nullptr && w->color == Color::RED) {
+        if (x == parent->left) {
+            Node<Key, Value>* w = parent->right; // Sibling
+            if (w->color == Color::RED) { // Case 1
                 w->color = Color::BLACK;
-                x->parent->color = Color::RED;
-                leftRotate(x->parent);
-                w = x->parent->right;
+                parent->color = Color::RED;
+                leftRotate(parent);
+                w = parent->right;
             }
-            if (w != nullptr && (w->left == nullptr || w->left->color == Color::BLACK) && (w->right == nullptr || w->right->color == Color::BLACK)) {
+            if ((w->left == nullptr || w->left->color == Color::BLACK) &&
+                (w->right == nullptr || w->right->color == Color::BLACK)) { // Case 2
                 w->color = Color::RED;
-                x = x->parent;
+                x = parent;
+                parent = x->parent;
             } else {
-                if (w != nullptr && (w->right == nullptr || w->right->color == Color::BLACK)) {
+                if (w->right == nullptr || w->right->color == Color::BLACK) { // Case 3
                     if (w->left != nullptr) w->left->color = Color::BLACK;
                     w->color = Color::RED;
                     rightRotate(w);
-                    w = x->parent->right;
+                    w = parent->right;
                 }
-                if (w != nullptr) {
-                    w->color = x->parent->color;
-                    x->parent->color = Color::BLACK;
-                    if (w->right != nullptr) w->right->color = Color::BLACK;
-                    leftRotate(x->parent);
-                }
-                x = root;
+                // Case 4
+                w->color = parent->color;
+                parent->color = Color::BLACK;
+                if (w->right != nullptr) w->right->color = Color::BLACK;
+                leftRotate(parent);
+                x = root; // Terminate
             }
-        } else {
-            Node<Key, Value>* w = x->parent->left;
-            if (w != nullptr && w->color == Color::RED) {
+        } else { // x == parent->right
+            Node<Key, Value>* w = parent->left; // Sibling
+            if (w->color == Color::RED) { // Case 1
                 w->color = Color::BLACK;
-                x->parent->color = Color::RED;
-                rightRotate(x->parent);
-                w = x->parent->left;
+                parent->color = Color::RED;
+                rightRotate(parent);
+                w = parent->left;
             }
-            if (w != nullptr && (w->right == nullptr || w->right->color == Color::BLACK) && (w->left == nullptr || w->left->color == Color::BLACK)) {
+            if ((w->right == nullptr || w->right->color == Color::BLACK) &&
+                (w->left == nullptr || w->left->color == Color::BLACK)) { // Case 2
                 w->color = Color::RED;
-                x = x->parent;
+                x = parent;
+                parent = x->parent;
             } else {
-                if (w != nullptr && (w->left == nullptr || w->left->color == Color::BLACK)) {
+                if (w->left == nullptr || w->left->color == Color::BLACK) { // Case 3
                     if (w->right != nullptr) w->right->color = Color::BLACK;
                     w->color = Color::RED;
                     leftRotate(w);
-                    w = x->parent->left;
+                    w = parent->left;
                 }
-                if (w != nullptr) {
-                    w->color = x->parent->color;
-                    x->parent->color = Color::BLACK;
-                    if (w->left != nullptr) w->left->color = Color::BLACK;
-                    rightRotate(x->parent);
-                }
-                x = root;
+                // Case 4
+                w->color = parent->color;
+                parent->color = Color::BLACK;
+                if (w->left != nullptr) w->left->color = Color::BLACK;
+                rightRotate(parent);
+                x = root; // Terminate
             }
         }
     }

@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <random>
+#include <set>
+#include <map> // Added for std::map in InsertAndTraverseWords test
 
 namespace absl {
 namespace container_internal {
@@ -141,7 +144,116 @@ TEST(RBTreeTest, ConstIterator) {
     // *it = "new_five"; // This should not compile
 }
 
+
+TEST(RBTreeTest, LowerBound) {
+    RBTree<int, std::string> tree;
+    tree.insert(10, "ten");
+    tree.insert(5, "five");
+    tree.insert(15, "fifteen");
+    tree.insert(3, "three");
+    tree.insert(7, "seven");
+
+    auto it = tree.lower_bound(7);
+    EXPECT_EQ(it.key(), 7);
+    EXPECT_EQ(*it, "seven");
+
+    it = tree.lower_bound(6);
+    EXPECT_EQ(it.key(), 7);
+    EXPECT_EQ(*it, "seven");
+
+    it = tree.lower_bound(15);
+    EXPECT_EQ(it.key(), 15);
+    EXPECT_EQ(*it, "fifteen");
+
+    it = tree.lower_bound(16);
+    EXPECT_EQ(it, tree.end());
+
+    it = tree.lower_bound(1);
+    EXPECT_EQ(it.key(), 3);
+    EXPECT_EQ(*it, "three");
+
+    RBTree<int, int> empty_tree;
+    auto empty_it = empty_tree.lower_bound(5);
+    EXPECT_EQ(empty_it, empty_tree.end());
+}
+
+TEST(RBTreeTest, Delete) {
+    RBTree<int, std::string> tree;
+    tree.insert(10, "ten");
+    tree.insert(5, "five");
+    tree.insert(15, "fifteen");
+    tree.insert(3, "three");
+    tree.insert(7, "seven");
+    tree.insert(12, "twelve");
+    tree.insert(18, "eighteen");
+
+    EXPECT_TRUE(tree.deleteNode(7)); // Delete leaf
+    EXPECT_EQ(tree.search(7), nullptr);
+    EXPECT_TRUE(tree.deleteNode(15)); // Delete node with one child (left)
+    EXPECT_EQ(tree.search(15), nullptr);
+    EXPECT_TRUE(tree.deleteNode(5)); // Delete node with one child (right)
+    EXPECT_EQ(tree.search(5), nullptr);
+    EXPECT_TRUE(tree.deleteNode(10)); // Delete node with two children
+    EXPECT_EQ(tree.search(10), nullptr);
+
+    std::vector<int> keys;
+    for (auto it = tree.begin(); it != tree.end(); ++it) {
+        keys.push_back(it.key());
+    }
+    std::vector<int> expected_keys = {3, 12, 18};
+    EXPECT_EQ(keys, expected_keys);
+
+    EXPECT_FALSE(tree.deleteNode(100)); // Delete non-existent key
+
+    EXPECT_TRUE(tree.deleteNode(12));
+    EXPECT_TRUE(tree.deleteNode(3));
+    EXPECT_TRUE(tree.deleteNode(18)); // Delete root
+    EXPECT_EQ(tree.getRoot(), nullptr);
+
+    RBTree<int, int> empty_tree;
+    EXPECT_FALSE(empty_tree.deleteNode(1)); // Delete from empty
+}
+
+}  // namespace
+
+TEST(RBTreeTest, RandomizedDelete) {
+    RBTree<std::string, int> tree;
+    std::vector<std::string> words;
+    std::ifstream word_file("absl/container/internal/words.txt");
+    ASSERT_TRUE(word_file.is_open());
+
+    std::string word;
+    int val = 0;
+    int word_count = 0;
+    while (std::getline(word_file, word) && word_count < 1000) {
+        if (!word.empty()) {
+            words.push_back(word);
+            tree.insert(word, val++);
+            word_count++;
+        }
+    }
+    word_file.close();
+
+    std::vector<std::string> shuffled_words = words;
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(shuffled_words.begin(), shuffled_words.end(), g);
+
+    for (const auto& word_to_delete : shuffled_words) {
+        EXPECT_TRUE(tree.deleteNode(word_to_delete)) << "Failed to delete: " << word_to_delete;
+
+        std::string last_key = "";
+        bool first = true;
+        for (auto it = tree.begin(); it != tree.end(); ++it) {
+            if (!first) {
+                EXPECT_LT(last_key, it.key()) << "Tree not sorted after deleting: " << word_to_delete;
+            }
+            last_key = it.key();
+            first = false;
+        }
+    }
+    EXPECT_EQ(tree.getRoot(), nullptr);
+}
+
 }  // namespace container_internal
 }  // namespace absl
-
-}
