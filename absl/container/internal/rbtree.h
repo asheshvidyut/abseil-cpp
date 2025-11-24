@@ -17,8 +17,9 @@ struct Node {
     Node *parent, *left, *right;
     Node *prev, *next; // Doubly linked list pointers
     Node *min_node, *max_node; // Min and Max nodes in the subtree rooted here
+    int subchild_count;
 
-    Node(Key k, Value v) : key(k), value(v), color(Color::RED), parent(nullptr), left(nullptr), right(nullptr), prev(nullptr), next(nullptr), min_node(this), max_node(this) {}
+    Node(Key k, Value v) : key(k), value(v), color(Color::RED), parent(nullptr), left(nullptr), right(nullptr), prev(nullptr), next(nullptr), min_node(this), max_node(this), subchild_count(1) {}
 };
 
 template <typename Key, typename Value>
@@ -85,10 +86,12 @@ public:
     bool deleteNode(const Key& key);
     Node<Key, Value>* search(const Key& key);
     void printTree();
+    void printTreeWithSubchildCount();
     Node<Key, Value>* getRoot() const { return root; }
     iterator begin() { return iterator(root ? root->min_node : nullptr); }
     iterator end() { return iterator(nullptr); }
     Value& operator[](const Key& key);
+    Node<Key, Value>* findKthLargest(int k);
 
     iterator lower_bound(const Key& key) {
         Node<Key, Value>* current = root;
@@ -140,6 +143,15 @@ public:
 private:
     Node<Key, Value>* root;
 
+    int getSubchildCount(Node<Key, Value>* node) {
+        return node ? node->subchild_count : 0;
+    }
+
+    void updateSubchildCount(Node<Key, Value>* node) {
+        if (!node) return;
+        node->subchild_count = getSubchildCount(node->left) + getSubchildCount(node->right) + 1;
+    }
+
     // Helper functions
     void leftRotate(Node<Key, Value>* x);
     void rightRotate(Node<Key, Value>* y);
@@ -149,6 +161,7 @@ private:
     Node<Key, Value>* maximum(Node<Key, Value>* node);
     void transplant(Node<Key, Value>* u, Node<Key, Value>* v);
     void printTreeHelper(Node<Key, Value>* node, std::string indent, bool last);
+    void printTreeHelperWithSubchildCount(Node<Key, Value>* node, std::string indent, bool last);
     void updateMinMax(Node<Key, Value>* node);
 };
 
@@ -172,6 +185,8 @@ void RBTree<Key, Value>::leftRotate(Node<Key, Value>* x) {
 
     updateMinMax(x);
     updateMinMax(y);
+    updateSubchildCount(x);
+    updateSubchildCount(y);
 }
 
 template <typename Key, typename Value>
@@ -194,6 +209,8 @@ void RBTree<Key, Value>::rightRotate(Node<Key, Value>* x) {
 
     updateMinMax(x);
     updateMinMax(y);
+    updateSubchildCount(x);
+    updateSubchildCount(y);
 }
 
 template <typename Key, typename Value>
@@ -295,6 +312,13 @@ void RBTree<Key, Value>::insert(const Key& key, const Value& value) {
     node->next = succ;
     if (pred != nullptr) pred->next = node;
     if (succ != nullptr) succ->prev = node;
+
+    // Update subchild_count for ancestors
+    temp = node->parent;
+    while (temp != nullptr) {
+        updateSubchildCount(temp);
+        temp = temp->parent;
+    }
 
     if (node->parent == nullptr) {
         node->color = Color::BLACK;
@@ -410,6 +434,13 @@ bool RBTree<Key, Value>::deleteNode(const Key& key) {
 
     delete z;
 
+    // Update subchild_count for ancestors
+    Node<Key, Value>* temp = x_parent;
+    while(temp != nullptr) {
+        updateSubchildCount(temp);
+        temp = temp->parent;
+    }
+
     // Update min/max on ancestors of where y was originally. 
     Node<Key, Value>* curr = x_parent;
     while(curr != nullptr) { 
@@ -512,6 +543,33 @@ void RBTree<Key, Value>::printTreeHelper(Node<Key, Value>* node, std::string ind
     }
 }
 
+template <typename Key, typename Value>
+void RBTree<Key, Value>::printTreeWithSubchildCount() {
+    if (root) {
+        printTreeHelperWithSubchildCount(this->root, "", true);
+    }
+}
+
+template <typename Key, typename Value>
+void RBTree<Key, Value>::printTreeHelperWithSubchildCount(Node<Key, Value>* node, std::string indent, bool last) {
+    if (node != nullptr) {
+        std::cout << indent;
+        if (last) {
+            std::cout << "R----";
+            indent += "     ";
+        } else {
+            std::cout << "L----";
+            indent += "|    ";
+        }
+
+        std::string sColor = (node->color == Color::RED) ? "RED" : "BLACK";
+        std::cout << node->key << "(" << sColor << ") [" << node->subchild_count << "]" << std::endl;
+        printTreeHelperWithSubchildCount(node->left, indent, false);
+        printTreeHelperWithSubchildCount(node->right, indent, true);
+    }
+}
+
+
 // Destructor Helper
 template <typename Key, typename Value>
 void deleteNodes(Node<Key, Value>* node) {
@@ -540,6 +598,28 @@ Value& RBTree<Key, Value>::operator[](const Key& key) {
     insert(key, default_value);
     node = search(key); // Re-search to get the new node
     return node->value;
+}
+
+
+
+template <typename Key, typename Value>
+Node<Key, Value>* RBTree<Key, Value>::findKthLargest(int k) {
+    if (k <= 0 || k > getSubchildCount(root)) {
+        return nullptr; // k is out of bounds
+    }
+    Node<Key, Value>* current = root;
+    while (current != nullptr) {
+        int right_count = getSubchildCount(current->right);
+        if (k == right_count + 1) {
+            return current;
+        } else if (k <= right_count) {
+            current = current->right;
+        } else {
+            k = k - right_count - 1;
+            current = current->left;
+        }
+    }
+    return nullptr; // Should not reach here if k is valid
 }
 
 }  // namespace container_internal

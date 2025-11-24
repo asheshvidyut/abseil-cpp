@@ -255,5 +255,115 @@ TEST(RBTreeTest, RandomizedDelete) {
     EXPECT_EQ(tree.getRoot(), nullptr);
 }
 
+
+
+TEST(RBTreeSubchildTest, SubchildCountAfterInsert) {
+    RBTree<int, int> tree;
+    tree.insert(10, 10);
+    EXPECT_EQ(tree.getRoot()->subchild_count, 1);
+    tree.insert(5, 5);
+    EXPECT_EQ(tree.search(10)->subchild_count, 2);
+    EXPECT_EQ(tree.search(5)->subchild_count, 1);
+    tree.insert(15, 15);
+    EXPECT_EQ(tree.search(10)->subchild_count, 3);
+    EXPECT_EQ(tree.search(15)->subchild_count, 1);
+    std::cout << "--- Tree after 3 inserts --- \n";
+    tree.printTreeWithSubchildCount();
+    tree.insert(3, 3);
+    tree.insert(7, 7);
+    EXPECT_EQ(tree.search(5)->subchild_count, 3);
+    EXPECT_EQ(tree.search(10)->subchild_count, 5);
+    std::cout << "--- Tree after all inserts --- \n";
+    tree.printTreeWithSubchildCount();
+}
+
+TEST(RBTreeSubchildTest, SubchildCountAfterDelete) {
+    RBTree<int, int> tree;
+    for (int i = 1; i <= 7; ++i) tree.insert(i, i);
+    EXPECT_EQ(tree.getRoot()->subchild_count, 7);
+    std::cout << "--- Tree before delete --- \n";
+    tree.printTreeWithSubchildCount();
+
+    tree.deleteNode(3);
+    EXPECT_EQ(tree.getRoot()->subchild_count, 6);
+    EXPECT_EQ(tree.search(1)->subchild_count, 1);
+    std::cout << "--- Tree after delete 3 --- \n";
+    tree.printTreeWithSubchildCount();
+
+    tree.deleteNode(6);
+    EXPECT_EQ(tree.getRoot()->subchild_count, 5);
+    tree.deleteNode(1);
+    EXPECT_EQ(tree.getRoot()->subchild_count, 4);
+    tree.deleteNode(4); // Root deletion
+    EXPECT_EQ(tree.getRoot()->subchild_count, 3);
+    std::cout << "--- Tree after all deletes --- \n";
+    tree.printTreeWithSubchildCount();
+}
+
+TEST(RBTreeSubchildTest, FindKthLargestBasic) {
+    RBTree<int, int> tree;
+    std::vector<int> nums = {10, 5, 15, 3, 7, 12, 18};
+    for (int n : nums) tree.insert(n, n);
+    // Sorted: 3, 5, 7, 10, 12, 15, 18
+
+    EXPECT_EQ(tree.findKthLargest(1)->key, 18);
+    EXPECT_EQ(tree.findKthLargest(2)->key, 15);
+    EXPECT_EQ(tree.findKthLargest(3)->key, 12);
+    EXPECT_EQ(tree.findKthLargest(4)->key, 10);
+    EXPECT_EQ(tree.findKthLargest(5)->key, 7);
+    EXPECT_EQ(tree.findKthLargest(6)->key, 5);
+    EXPECT_EQ(tree.findKthLargest(7)->key, 3);
+}
+
+TEST(RBTreeSubchildTest, FindKthLargestEdgeCases) {
+    RBTree<int, int> tree;
+    EXPECT_EQ(tree.findKthLargest(1), nullptr);
+    tree.insert(10, 10);
+    EXPECT_EQ(tree.findKthLargest(1)->key, 10);
+    EXPECT_EQ(tree.findKthLargest(0), nullptr);
+    EXPECT_EQ(tree.findKthLargest(2), nullptr);
+
+    tree.insert(5, 5);
+    tree.insert(15, 15);
+    // 5, 10, 15
+    EXPECT_EQ(tree.findKthLargest(1)->key, 15);
+    EXPECT_EQ(tree.findKthLargest(3)->key, 5);
+    EXPECT_EQ(tree.findKthLargest(4), nullptr);
+}
+
+
+
+TEST(RBTreeSubchildTest, FindKthLargestWords) {
+    RBTree<std::string, int> tree;
+    std::vector<std::string> words;
+    std::set<std::string> unique_words;
+    std::ifstream word_file("absl/container/internal/words.txt");
+    ASSERT_TRUE(word_file.is_open());
+
+    std::string word;
+    int val = 0;
+    while (std::getline(word_file, word)) {
+        if (!word.empty()) {
+            if (unique_words.find(word) == unique_words.end()) {
+                unique_words.insert(word);
+                tree.insert(word, val++);
+            }
+        }
+    }
+    word_file.close();
+
+    for(const auto& w : unique_words) {
+        words.push_back(w);
+    }
+    std::sort(words.begin(), words.end());
+
+    int n = words.size();
+    for (int k = 1; k <= n; ++k) {
+        Node<std::string, int>* node = tree.findKthLargest(k);
+        ASSERT_NE(node, nullptr) << "Failed for k = " << k;
+        EXPECT_EQ(node->key, words[n - k]) << "Mismatch for k = " << k;
+    }
+}
+
 }  // namespace container_internal
 }  // namespace absl
