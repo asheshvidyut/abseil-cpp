@@ -13,17 +13,29 @@
 #include "absl/container/internal/rbtree.h"
 
 // Function to read words from the file
-std::vector<std::string> ReadWords(const std::string& filename, size_t max_words = 0) {
+std::vector<std::string> ReadWords(const std::string& filename, size_t max_words = 0, bool unique = false) {
     std::vector<std::string> words;
+    std::set<std::string> unique_words;
     std::ifstream file(filename);
     std::string word;
     if (file.is_open()) {
-        size_t count = 0;
-        while (file >> word && (max_words == 0 || count < max_words)) {
-            words.push_back(word);
-            count++;
+        while (file >> word) {
+            if (unique) {
+                if (unique_words.size() < max_words || max_words == 0) {
+                    unique_words.insert(word);
+                }
+                if (max_words > 0 && unique_words.size() == max_words) break;
+            } else {
+                words.push_back(word);
+                if (max_words > 0 && words.size() == max_words) break;
+            }
         }
         file.close();
+    }
+    if (unique) {
+        for (const auto& w : unique_words) {
+            words.push_back(w);
+        }
     }
     return words;
 }
@@ -320,4 +332,168 @@ static void BM_BTreeMap_Insert_Size(benchmark::State& state) {
     }
     state.counters["elements"] = benchmark::Counter(words.size());
 }
+
+// Benchmarks with 15000 unique words
+static void BM_BTreeMap_Insert_15000Unique(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt", 15000, true);
+    for (auto _ : state) {
+        absl::btree_map<std::string, int> map;
+        int i = 0;
+        for (const auto& word : words) {
+            map[word] = i++;
+        }
+    }
+    state.counters["words"] = benchmark::Counter(words.size());
+}
+BENCHMARK(BM_BTreeMap_Insert_15000Unique);
+
+static void BM_StdMap_Insert_15000Unique(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt", 15000, true);
+    for (auto _ : state) {
+        std::map<std::string, int> map;
+        int i = 0;
+        for (const auto& word : words) {
+            map[word] = i++;
+        }
+    }
+    state.counters["words"] = benchmark::Counter(words.size());
+}
+BENCHMARK(BM_StdMap_Insert_15000Unique);
+
+static void BM_RBTree_Insert_15000Unique(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt", 15000, true);
+    for (auto _ : state) {
+        absl::container_internal::RBTree<std::string, int> tree;
+        int i = 0;
+        for (const auto& word : words) {
+            tree.insert(word, i++);
+        }
+    }
+    state.counters["words"] = benchmark::Counter(words.size());
+}
+BENCHMARK(BM_RBTree_Insert_15000Unique);
+
+static void BM_BTreeMap_Search_15000Unique(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt", 15000, true);
+    absl::btree_map<std::string, int> map;
+    int i = 0;
+    for (const auto& word : words) {
+        map[word] = i++;
+    }
+    auto search_words = GetSearchWords(words, words.size() / 10);
+
+    for (auto _ : state) {
+        for (const auto& word : search_words) {
+            benchmark::DoNotOptimize(map.find(word));
+        }
+    }
+    state.counters["total_words"] = benchmark::Counter(words.size());
+    state.counters["search_words"] = benchmark::Counter(search_words.size());
+}
+BENCHMARK(BM_BTreeMap_Search_15000Unique);
+
+static void BM_StdMap_Search_15000Unique(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt", 15000, true);
+    std::map<std::string, int> map;
+    int i = 0;
+    for (const auto& word : words) {
+        map[word] = i++;
+    }
+    auto search_words = GetSearchWords(words, words.size() / 10);
+
+    for (auto _ : state) {
+        for (const auto& word : search_words) {
+            benchmark::DoNotOptimize(map.find(word));
+        }
+    }
+    state.counters["total_words"] = benchmark::Counter(words.size());
+    state.counters["search_words"] = benchmark::Counter(search_words.size());
+}
+BENCHMARK(BM_StdMap_Search_15000Unique);
+
+static void BM_RBTree_Search_15000Unique(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt", 15000, true);
+    absl::container_internal::RBTree<std::string, int> tree;
+    int i = 0;
+    for (const auto& word : words) {
+        tree.insert(word, i++);
+    }
+    auto search_words = GetSearchWords(words, words.size() / 10);
+
+    for (auto _ : state) {
+        for (const auto& word : search_words) {
+            benchmark::DoNotOptimize(tree.search(word));
+        }
+    }
+    state.counters["total_words"] = benchmark::Counter(words.size());
+    state.counters["search_words"] = benchmark::Counter(search_words.size());
+}
+BENCHMARK(BM_RBTree_Search_15000Unique);
+
+static void BM_BTreeMap_Iterate_All_15000Unique(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt", 15000, true);
+    absl::btree_map<std::string, int> map;
+    int i = 0;
+    for (const auto& word : words) {
+        map[word] = i++;
+    }
+
+    size_t iterated_count = 0;
+    for (auto _ : state) {
+        iterated_count = 0;
+        for (auto const& [key, val] : map) {
+            benchmark::DoNotOptimize(key);
+            benchmark::DoNotOptimize(val);
+            iterated_count++;
+        }
+    }
+    state.counters["words_iterated"] = benchmark::Counter(iterated_count);
+    state.counters["total_words"] = benchmark::Counter(words.size());
+}
+BENCHMARK(BM_BTreeMap_Iterate_All_15000Unique);
+
+static void BM_StdMap_Iterate_All_15000Unique(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt", 15000, true);
+    std::map<std::string, int> map;
+    int i = 0;
+    for (const auto& word : words) {
+        map[word] = i++;
+    }
+
+    size_t iterated_count = 0;
+    for (auto _ : state) {
+        iterated_count = 0;
+        for (auto const& [key, val] : map) {
+            benchmark::DoNotOptimize(key);
+            benchmark::DoNotOptimize(val);
+            iterated_count++;
+        }
+    }
+    state.counters["words_iterated"] = benchmark::Counter(iterated_count);
+    state.counters["total_words"] = benchmark::Counter(words.size());
+}
+BENCHMARK(BM_StdMap_Iterate_All_15000Unique);
+
+static void BM_RBTree_Iterate_All_15000Unique(benchmark::State& state) {
+    auto words = ReadWords("absl/container/internal/words.txt", 15000, true);
+    absl::container_internal::RBTree<std::string, int> tree;
+    int i = 0;
+    for (const auto& word : words) {
+        tree.insert(word, i++);
+    }
+
+    size_t iterated_count = 0;
+    for (auto _ : state) {
+        iterated_count = 0;
+        for (auto it = tree.begin(); it != tree.end(); ++it) {
+            benchmark::DoNotOptimize(it.key());
+            benchmark::DoNotOptimize(*it);
+            iterated_count++;
+        }
+    }
+    state.counters["words_iterated"] = benchmark::Counter(iterated_count);
+    state.counters["total_words"] = benchmark::Counter(words.size());
+}
+BENCHMARK(BM_RBTree_Iterate_All_15000Unique);
+
 // BENCHMARK_MAIN() is in the BUILD file dependency
